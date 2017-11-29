@@ -1,7 +1,27 @@
 import math
 import sys
 
+MU_EARTH = 398600.4418
+
 def rotate(v, axis, angle):
+    """Rotate a vector about an axis through an angle
+
+    Parameters
+    ----------
+    v : array with exactly 3 numeric entries
+        The vector to be rotated.
+    axis : one of 'x', 'z'
+        The axis about which to rotate. Rotations about y are not
+        supported since they are not needed!
+    angle : float
+        Angle of rotation, in radians.
+
+    Returns
+    -------
+    u : array with exactly 3 numeric entries
+        The rotated vector.
+
+    """
     u = [0, 0, 0]
     if axis == 'x':
         u[0] = v[0]
@@ -13,7 +33,7 @@ def rotate(v, axis, angle):
         u[2] = v[2]
     else:
         raise ValueError('Not supported.')
-    
+
     return u
 
 class ClassicalElements:
@@ -37,6 +57,10 @@ class ClassicalElements:
         Mean anomaly, in degrees (see Notes)
     ecc_anomaly : float
         Eccentric anomaly, in degrees (see Notes)
+    arg_lat : float
+        Argument of latitude, in degrees (see Notes)
+    true_long : float
+        True longitude, in degrees (see Notes)
 
     Usage
     -----
@@ -59,12 +83,10 @@ class ClassicalElements:
     The position within the orbit (true/mean/eccentric anomalies) are
     all defined relative to the argument of periapsis. In the event of
     a circular orbit (eccentricity equal to zero), this point is not
-    defined.
-
-    If the inclination is zero and the eccentricity is zero, use true_longitude.
-    If the inclination is zero and the eccentricity is not zero, use true_anomaly (periapsis still defined).
-    If the inclination is not zero and the eccentricity is zero, use arg_lat.
-    If the inclination is not zero and the eccentricity is not zero, use true_anomaly.
+    defined. In that case, the position may be specified relative to
+    the ascending node (arg_lat). If the ascending node is not
+    defined, the position may be specified relative to the reference
+    point (true_long).
 
     """
 
@@ -78,7 +100,7 @@ class ClassicalElements:
     def __init__(self, sma, ecc, inc, raan=None, argp=None,
                  true_anomaly=None, mean_anomaly=None,
                  eccentric_anomaly=None, arg_lat=None,
-                 true_long=None, GM=3.986004418e14):
+                 true_long=None, GM=MU_EARTH):
         self._sma = sma
         self._ecc = ecc
         self._inc = math.radians(inc)
@@ -116,22 +138,34 @@ class ClassicalElements:
         else:
             raise ValueError('Position in orbit must be provided (e.g. true anomaly).')
 
+
     def get_sma(self):
+        '''Get semimajor axis (in km)'''
         return self._sma
 
+
     def get_ecc(self):
+        '''Get eccentricity'''
         return self._ecc
 
+
     def get_inc(self):
+        '''Get inclination (in degrees)'''
         return math.degrees(self._inc)
 
+
     def get_raan(self):
+        '''Get RAAN (in degrees)'''
         return math.degrees(self._raan)
 
+
     def get_argp(self):
+        '''Get argument of periapsis (in degrees)'''
         return math.degrees(self._argp)
 
+
     def get_true_anomaly(self):
+        '''Get true anomaly (in degrees)'''
         if self._anomaly_type == self.TRUE_ANOMALY:
             return math.degrees(self._true_anomaly)
         elif self._anomaly_type == self.ECC_ANOMALY:
@@ -142,7 +176,9 @@ class ClassicalElements:
             true_anomaly = self.ecc_to_true(ecc_anomaly, self.get_ecc())
             return math.degrees(true_anomaly)
 
+
     def get_mean_anomaly(self):
+        '''Get mean anomaly (in degrees)'''
         if self._anomaly_type == self.TRUE_ANOMALY:
             ecc_anomaly = self.true_to_ecc(self._true_anomaly, self.get_ecc())
             mean_anomaly = self.ecc_to_mean(ecc_anomaly, self.get_ecc())
@@ -153,7 +189,9 @@ class ClassicalElements:
         elif self._anomaly_type == self.MEAN_ANOMALY:
             return math.degrees(self._mean_anomaly)
 
+
     def get_ecc_anomaly(self):
+        '''Get eccentric anomaly (in degrees)'''
         if self._anomaly_type == self.TRUE_ANOMALY:
             ecc_anomaly = self.true_to_ecc(self._true_anomaly, self.get_ecc())
             return math.degrees(ecc_anomaly)
@@ -163,14 +201,17 @@ class ClassicalElements:
             ecc_anomaly = self.mean_to_ecc(self._mean_anomaly, self.get_ecc())
             return math.degrees(ecc_anomaly)
 
+
     def ecc_to_true(self, ecc_anomaly, eccentricity):
         '''Convert eccentric anomaly to true anomaly.'''
         return 2. * math.atan2(math.sqrt(1 + eccentricity) * math.sin(ecc_anomaly / 2.),
                                math.sqrt(1 - eccentricity) * math.cos(ecc_anomaly / 2.))
 
+
     def true_to_ecc(self, true_anomaly, eccentricity):
         '''Convert true anomaly to eccentric anomaly.'''
         return math.acos((eccentricity + math.cos(true_anomaly)) / (1. + eccentricity * math.cos(true_anomaly)))
+
 
     def mean_to_ecc(self, mean_anomaly, eccentricity):
         '''Convert mean anomaly to eccentric anomaly.'''
@@ -196,8 +237,18 @@ class ClassicalElements:
         '''Convert eccentric anomaly to mean anomaly.'''
         return ecc_anomaly - eccentricity * math.sin(ecc_anomaly)
 
+
     def get_orbital_vectors(self):
-        # From Rene Schwarz
+        """Convert classical elements to orbital vectors
+
+        Notes
+        -----
+        We use the method of Rene Schwarz.
+        https://www.rene-schwarz.com/web/Home
+        https://downloads.rene-schwarz.com/download/M001-Keplerian_Orbit_Elements_to_Cartesian_State_Vectors.pdf
+
+        """
+
         E = self.get_ecc_anomaly()
         tru = self.get_true_anomaly()
         e = self.get_ecc()
@@ -217,6 +268,7 @@ class ClassicalElements:
 
         return r, v
 
+
 class KeplerianPropagator:
     """A simple 2-body propagator.
 
@@ -227,12 +279,14 @@ class KeplerianPropagator:
     prop.set_state(state)
 
     """
-    def __init__(self, GM=3.986004418e14):
+    def __init__(self, GM=MU_EARTH):
         self._GM = GM
+
 
     def set_state(self, state, epoch):
         self._state = state
         self._epoch = epoch
+
 
     def propagate(self, t):
         delta_t = t - self._epoch
@@ -248,10 +302,12 @@ class KeplerianPropagator:
                                  argp=self._state.get_argp(),
                                  mean_anomaly=mean_anomaly_at_time)
 
+
 class Orbit:
     def __init__(self, elements, epoch):
         self._elements = elements
         self._epoch = epoch
+
 
     def propagate(self, t, propagator='kepler'):
         if propagator != 'kepler':
@@ -285,6 +341,7 @@ class GroundStation:
         self._alt = alt
         self._x = self.lla_to_xyz(self._lat, self._lon, self._alt)
 
+
     def lla_to_xyz(self, lat, lon, alt):
         x = [0, 0, 0]
         x[0] = (self.R_EARTH + alt) * math.cos(lat) * math.cos(lon)
@@ -297,22 +354,40 @@ class GroundStation:
         theta = 0.
         return rotate(x, 'z', theta)
 
-    def range(self, orbit, time):
+
+    def range_az_el(self, orbit, time):
         prop = KeplerianPropagator()
         prop.set_state(orbit._elements, orbit._epoch)
         elements = prop.propagate(time)
         r, v = elements.get_orbital_vectors()
-        rx, ry, rz = r[0], r[1], r[2]
-        
+
         # Let w be the angular velocity of the Earth.
         # Let t be the amount of time between the epoch (e.g. J2000) and time.
         # Let phi = w*t. Need to rotate about z by phi.
         x = rotate(self._x, 'z', self.W_EARTH * (time - self.J2000))
+
+        # Range is just \| r - x \|_2
         ds2 = 0.
         for i in range(2):
             ds = r[i] - x[i]
             ds2 += ds * ds
-        return math.sqrt(ds2)
+        rng = math.sqrt(ds2)
+
+        # El is the angle between (r - x) and x
+        # cos(El) = (r - x) dot x / (norm x * norm (r-x))
+        num = 0.
+        nx = 0.
+        nrmx = 0.
+        for i in range(2):
+            num += x[i] * (r[i] - x[i])
+            nx += x[i] * x[i]
+            nrmx += (r[i] - x[i]) * (r[i] - x[i])
+        el = math.degrees(math.acos(num / math.sqrt(nx * nrmx)))
+
+        # Az is more complicated and not needed for estpy, so I'm skipping!
+        az = 0
+        return rng, az, el
+
 
 if __name__ == '__main__':
     ce = ClassicalElements(sma=20000., ecc=0.1, inc=15., raan=20., argp=30., true_anomaly=0.)
@@ -322,4 +397,6 @@ if __name__ == '__main__':
     new_ce = kp.propagate(600.) # 10 minutes
     print new_ce.get_true_anomaly()
     la = GroundStation(lat=34, lon=118, alt=0.)
-    print la.range(orb, 600.)
+    for it in range(60):
+        r, az, el = la.range_az_el(orb, 10. * it)
+        print 10. * it, r, el
