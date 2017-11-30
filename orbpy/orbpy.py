@@ -382,7 +382,8 @@ class GroundStation:
             num += x[i] * (r[i] - x[i])
             nx += x[i] * x[i]
             nrmx += (r[i] - x[i]) * (r[i] - x[i])
-        el = math.degrees(math.acos(num / math.sqrt(nx * nrmx)))
+        declination = math.degrees(math.acos(num / math.sqrt(nx * nrmx)))
+        el = 90. - declination
 
         # Az is more complicated and not needed for estpy, so I'm skipping!
         az = 0
@@ -397,6 +398,6 @@ if __name__ == '__main__':
     new_ce = kp.propagate(600.) # 10 minutes
     print new_ce.get_true_anomaly()
     la = GroundStation(lat=34, lon=118, alt=0.)
-    for it in range(60):
-        r, az, el = la.range_az_el(orb, 10. * it)
+    for it in range(12*8):
+        r, az, el = la.range_az_el(orb, 300. * it)
         print 10. * it, r, el
